@@ -1,4 +1,4 @@
-# DesktopStocks 📈
+# ASXTickerWidget 📈
 
 A lightweight, zero-bloat, borderless floating desktop ticker built in Python. Designed for quick glanceability without the clutter of traditional financial apps. 
 

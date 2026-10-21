@@ -8,7 +8,6 @@ import os
 
 CONFIG_FILE = "watchlist.json"
 
-# Default watchlist if no saved file exists
 DEFAULT_WATCHLIST = [
     {"ticker": "BHP.AX", "name": "BHP", "gf": "BHP:ASX"},
     {"ticker": "LYC.AX", "name": "LYC", "gf": "LYC:ASX"},
@@ -38,10 +37,11 @@ class ASXTickerApp:
         self.root.title("ASX Desktop Ticker")
         
         self.watchlist = load_watchlist()
+        self.is_topmost = False  # Default: starts behind windows so it's not annoying
 
-        # Window styling: Always on top, dark theme, frameless
+        # Window styling: Frameless, dark theme, honors topmost toggle
         self.root.overrideredirect(True)
-        self.root.attributes("-topmost", True)
+        self.root.attributes("-topmost", self.is_topmost)
         self.root.attributes("-alpha", 0.92)
         self.root.configure(bg="#121212")
 
@@ -58,15 +58,20 @@ class ASXTickerApp:
 
         # Close button
         close_btn = tk.Label(header_frame, text="✕", fg="#666666", bg="#121212", font=("Segoe UI", 9, "bold"), cursor="hand2")
-        close_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        close_btn.pack(side=tk.RIGHT, padx=(2, 0))
         close_btn.bind("<Button-1>", lambda e: self.root.destroy())
 
         # Add Ticker button (+)
         add_btn = tk.Label(header_frame, text="+", fg="#4ade80", bg="#121212", font=("Segoe UI", 11, "bold"), cursor="hand2")
-        add_btn.pack(side=tk.RIGHT, padx=(5, 5))
+        add_btn.pack(side=tk.RIGHT, padx=(5, 2))
         add_btn.bind("<Button-1>", lambda e: self.prompt_add_ticker())
 
-        # Enable dragging the window anywhere
+        # Pin / Always-on-Top Toggle button (📌)
+        self.pin_btn = tk.Label(header_frame, text="📌", fg="#555555", bg="#121212", font=("Segoe UI", 9), cursor="hand2")
+        self.pin_btn.pack(side=tk.RIGHT, padx=(5, 2))
+        self.pin_btn.bind("<Button-1>", lambda e: self.toggle_topmost())
+
+        # Enable dragging the window anywhere from the header
         header_frame.bind("<Button-1>", self.start_move)
         header_frame.bind("<B1-Motion>", self.do_move)
         title_lbl.bind("<Button-1>", self.start_move)
@@ -80,8 +85,14 @@ class ASXTickerApp:
         self.build_watchlist_ui()
         self.update_data()
 
+    def toggle_topmost(self):
+        self.is_topmost = not self.is_topmost
+        self.root.attributes("-topmost", self.is_topmost)
+        # Highlight pin green when active, dim when inactive
+        color = "#4ade80" if self.is_topmost else "#555555"
+        self.pin_btn.config(fg=color)
+
     def build_watchlist_ui(self):
-        # Clear existing widgets if rebuilding
         for widget_info in self.stock_widgets:
             widget_info["frame"].destroy()
         self.stock_widgets.clear()
@@ -90,7 +101,6 @@ class ASXTickerApp:
             row = self.create_stock_row(self.rows_container, item)
             self.stock_widgets.append(row)
         
-        # Dynamically resize window height based on number of items
         new_height = 60 + (len(self.watchlist) * 38)
         x = self.root.winfo_x()
         y = self.root.winfo_y()
@@ -100,20 +110,23 @@ class ASXTickerApp:
         frame = tk.Frame(parent, bg="#1e1e1e", cursor="hand2", padx=8, pady=6)
         frame.pack(fill=tk.X, pady=3)
 
-        lbl_ticker = tk.Label(frame, text=item["name"], fg="#ffffff", bg="#1e1e1e", font=("Segoe UI", 10, "bold"), width=6, anchor="w")
+        lbl_ticker = tk.Label(frame, text=item["name"], fg="#ffffff", bg="#1e1e1e", font=("Segoe UI", 10, "bold"), width=5, anchor="w")
         lbl_ticker.pack(side=tk.LEFT)
 
-        lbl_price = tk.Label(frame, text="Loading...", fg="#cccccc", bg="#1e1e1e", font=("Segoe UI", 10), width=8, anchor="e")
-        lbl_price.pack(side=tk.LEFT, padx=5)
+        lbl_price = tk.Label(frame, text="Loading...", fg="#cccccc", bg="#1e1e1e", font=("Segoe UI", 9), width=7, anchor="e")
+        lbl_price.pack(side=tk.LEFT, padx=2)
 
-        lbl_change = tk.Label(frame, text="--", fg="#888888", bg="#1e1e1e", font=("Segoe UI", 9, "bold"), width=8, anchor="e")
-        lbl_change.pack(side=tk.RIGHT)
+        lbl_change = tk.Label(frame, text="--", fg="#888888", bg="#1e1e1e", font=("Segoe UI", 9, "bold"), width=7, anchor="e")
+        lbl_change.pack(side=tk.LEFT, padx=2)
 
-        # Right click to delete ticker option
-        frame.bind("<Button-3>", lambda e, t=item["ticker"]: self.remove_ticker(t))
-        lbl_ticker.bind("<Button-3>", lambda e, t=item["ticker"]: self.remove_ticker(t))
+        # Explicit individual delete button (✕) at the end of the row
+        del_btn = tk.Label(frame, text="✕", fg="#666666", bg="#1e1e1e", font=("Segoe UI", 8, "bold"), cursor="hand2")
+        del_btn.pack(side=tk.RIGHT, padx=(2, 0))
+        del_btn.bind("<Button-1>", lambda e, t=item["ticker"]: self.remove_ticker(t))
+        del_btn.bind("<Enter>", lambda e, b=del_btn: b.config(fg="#f87171"))
+        del_btn.bind("<Leave>", lambda e, b=del_btn: b.config(fg="#666666"))
 
-        # Left click event to open Google Finance
+        # Left click event on the row opens Google Finance
         url = f"https://www.google.com/finance/quote/{item['gf']}"
         for widget in (frame, lbl_ticker, lbl_price, lbl_change):
             widget.bind("<Button-1>", lambda e, u=url: webbrowser.open(u))
@@ -123,14 +136,12 @@ class ASXTickerApp:
         return {"ticker": item["ticker"], "frame": frame, "price_lbl": lbl_price, "change_lbl": lbl_change}
 
     def prompt_add_ticker(self):
-        # Open a small dialog to get ticker code
         code = simpledialog.askstring("Add Ticker", "Enter ASX Code (e.g. CBA, FMG, PLS):", parent=self.root)
         if code:
             clean_code = code.strip().upper()
             ticker_yf = f"{clean_code}.AX"
             ticker_gf = f"{clean_code}:ASX"
             
-            # Check if already exists
             if not any(item["ticker"] == ticker_yf for item in self.watchlist):
                 self.watchlist.append({"ticker": ticker_yf, "name": clean_code, "gf": ticker_gf})
                 save_watchlist(self.watchlist)

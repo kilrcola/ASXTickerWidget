@@ -2,15 +2,17 @@
 
 A lightweight, zero-bloat, borderless floating desktop ticker built in Python. Designed for quick glanceability without the clutter of traditional financial apps. 
 
-Features clean color-coded daily percentage changes and **one-click access straight to Google Finance** for deep dives.
+Features clean color-coded daily percentage changes, **one-click access straight to Google Finance** for deep dives, and **right-click 7-day price charts**.
 
 ---
 
 ## ✨ Features
-* **Minimalist Floating UI:** Stays on top of your windows (or sits quietly in the corner) with adjustable transparency.
-* **Instant Deep Dives:** Click any ticker row to instantly open its Google Finance page in your browser.
-* **Real-Time Tracking:** Automatically pulls live data for your custom watchlist.
-* **Zero Bloat:** No ads, no sign-ups, and no heavy UI frameworks.
+- **Minimalist Floating UI:** Sits quietly behind your windows by default, with an optional **Pin (📌)** toggle to keep it always-on-top when needed.
+- **Dynamic Watchlist & Scroll:** Add or remove ASX tickers on the fly. Automatically expands up to 6 rows and introduces a smooth scrollbar for larger watchlists.
+- **Custom Sorting:** Use the `▲` and `▼` reorder buttons on each row to organize your watchlist exactly how you want.
+- **7-Day Price Charts:** Right-click any stock row to instantly pop open a sleek, dark-mode chart showing the last 7 days of price action.
+- **Instant Deep Dives:** Left-click any ticker row to instantly open its Google Finance page in your browser.
+- **Zero Bloat:** No ads, no heavy UI frameworks, and your watchlist is saved locally via JSON.
 
 ---
 
@@ -20,6 +22,6 @@ Features clean color-coded daily percentage changes and **one-click access strai
 Ensure you have Python installed on your system. 
 
 ### 2. Install Dependencies
-Clone this repository and install the required data library via your terminal:
+Clone this repository and install the required libraries via your terminal:
 ```bash
-pip install yfinance
+pip install -r requirements.txt

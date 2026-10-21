@@ -1,10 +1,9 @@
 import tkinter as tk
-from tkinter import ttk
 import yfinance as yf
 import webbrowser
 import threading
 
-# Your Watchlist (Yahoo Finance symbol vs Google Finance URL symbol)
+# Your Watchlist
 WATCHLIST = [
     {"ticker": "BHP.AX", "name": "BHP", "gf": "BHP:ASX"},
     {"ticker": "LYC.AX", "name": "LYC", "gf": "LYC:ASX"},
@@ -17,10 +16,10 @@ class ASXTickerApp:
         self.root = root
         self.root.title("ASX Desktop Ticker")
         
-        # Window styling: Always on top, dark theme, no standard title bar (frameless floating card)
+        # Window styling: Always on top, dark theme, frameless
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
-        self.root.attributes("-alpha", 0.92) # Slight transparency
+        self.root.attributes("-alpha", 0.92)
         self.root.configure(bg="#121212")
 
         # Main container frame
@@ -38,7 +37,7 @@ class ASXTickerApp:
         close_btn.pack(side=tk.RIGHT)
         close_btn.bind("<Button-1>", lambda e: self.root.destroy())
 
-        # Enable dragging the borderless window anywhere on screen
+        # Enable dragging the window anywhere
         header_frame.bind("<Button-1>", self.start_move)
         header_frame.bind("<B1-Motion>", self.do_move)
         title_lbl.bind("<Button-1>", self.start_move)
@@ -60,7 +59,6 @@ class ASXTickerApp:
         frame = tk.Frame(parent, bg="#1e1e1e", cursor="hand2", padx=8, pady=6)
         frame.pack(fill=tk.X, pady=3)
 
-        # Layout columns inside the row
         lbl_ticker = tk.Label(frame, text=item["name"], fg="#ffffff", bg="#1e1e1e", font=("Segoe UI", 10, "bold"), width=6, anchor="w")
         lbl_ticker.pack(side=tk.LEFT)
 
@@ -74,53 +72,44 @@ class ASXTickerApp:
         url = f"https://www.google.com/finance/quote/{item['gf']}"
         for widget in (frame, lbl_ticker, lbl_price, lbl_change):
             widget.bind("<Button-1>", lambda e, u=url: webbrowser.open(u))
-            # Subtle hover effect
             widget.bind("<Enter>", lambda e, f=frame: f.config(bg="#2d2d2d"))
             widget.bind("<Leave>", lambda e, f=frame: f.config(bg="#1e1e1e"))
 
         return {"ticker": item["ticker"], "price_lbl": lbl_price, "change_lbl": lbl_change}
 
     def update_data(self):
-        # Fetch data in a background thread so the UI never freezes
         threading.Thread(target=self._fetch_prices, daemon=True).start()
-        # Refresh every 60 seconds
         self.root.after(60000, self.update_data)
 
     def _fetch_prices(self):
-        tickers = [item["ticker"] for item in WATCHLIST]
-        try:
-            data = yf.download(tickers, period="2d", interval="1d", progress=False, group_by="ticker")
-            
-            for widget in self.stock_widgets:
-                t = widget["ticker"]
-                try:
-                    df = data[t] if len(tickers) > 1 else data
-                    if len(df) >= 2:
-                        close_prev = df['Close'].iloc[-2].item()
-                        close_curr = df['Close'].iloc[-1].item()
-                        change = close_curr - close_prev
-                        pct_change = (change / close_prev) * 100
+        # Fetch each ticker individually to ensure robust handling for all ASX stocks
+        for widget in self.stock_widgets:
+            t = widget["ticker"]
+            try:
+                stock = yf.Ticker(t)
+                df = stock.history(period="2d")
+                if len(df) >= 2:
+                    close_prev = df['Close'].iloc[-2]
+                    close_curr = df['Close'].iloc[-1]
+                    change = close_curr - close_prev
+                    pct_change = (change / close_prev) * 100
 
-                        price_text = f"${close_curr:.2f}"
-                        if change >= 0:
-                            change_text = f"+{pct_change:.2f}%"
-                            color = "#4ade80"  # Soft clean green
-                        else:
-                            change_text = f"{pct_change:.2f}%"
-                            color = "#f87171"  # Soft clean red
+                    price_text = f"${close_curr:.2f}"
+                    if change >= 0:
+                        change_text = f"+{pct_change:.2f}%"
+                        color = "#4ade80"  # Soft green
+                    else:
+                        change_text = f"{pct_change:.2f}%"
+                        color = "#f87171"  # Soft red
 
-                        # Update UI safely from main thread
-                        self.root.after(0, lambda w=widget, p=price_text, c=change_text, col=color: self._update_ui_row(w, p, c, col))
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                    self.root.after(0, lambda w=widget, p=price_text, c=change_text, col=color: self._update_ui_row(w, p, c, col))
+            except Exception:
+                pass
 
     def _update_ui_row(self, widget, price, change, color):
         widget["price_lbl"].config(text=price)
         widget["change_lbl"].config(text=change, fg=color)
 
-    # Window dragging logic
     def start_move(self, event):
         self.x = event.x
         self.y = event.y
@@ -134,7 +123,7 @@ class ASXTickerApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    # Initial window position (top right-ish of screen)
-    root.geometry("240x190+1500+150")
+    # Increased height to 230 to comfortably fit all rows without clipping
+    root.geometry("240x230+1500+150")
     app = ASXTickerApp(root)
     root.mainloop()

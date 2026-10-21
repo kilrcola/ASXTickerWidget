@@ -5,6 +5,7 @@ import webbrowser
 import threading
 import json
 import os
+import matplotlib.pyplot as plt
 
 CONFIG_FILE = "watchlist.json"
 
@@ -37,49 +38,54 @@ class ASXTickerApp:
         self.root.title("ASX Desktop Ticker")
         
         self.watchlist = load_watchlist()
-        self.is_topmost = False  # Default: starts behind windows so it's not annoying
+        self.is_topmost = False
 
-        # Window styling: Frameless, dark theme, honors topmost toggle
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", self.is_topmost)
-        self.root.attributes("-alpha", 0.92)
+        self.root.attributes("-alpha", 0.94)
         self.root.configure(bg="#121212")
 
         # Main container frame
-        self.main_frame = tk.Frame(root, bg="#121212", padx=10, pady=10)
+        self.main_frame = tk.Frame(root, bg="#121212", padx=8, pady=8)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Title / Drag header bar
+        # Header bar
         header_frame = tk.Frame(self.main_frame, bg="#121212")
         header_frame.pack(fill=tk.X, pady=(0, 5))
         
         title_lbl = tk.Label(header_frame, text="ASX WATCHLIST", fg="#888888", bg="#121212", font=("Segoe UI", 9, "bold"))
         title_lbl.pack(side=tk.LEFT)
 
-        # Close button
         close_btn = tk.Label(header_frame, text="✕", fg="#666666", bg="#121212", font=("Segoe UI", 9, "bold"), cursor="hand2")
         close_btn.pack(side=tk.RIGHT, padx=(2, 0))
         close_btn.bind("<Button-1>", lambda e: self.root.destroy())
 
-        # Add Ticker button (+)
         add_btn = tk.Label(header_frame, text="+", fg="#4ade80", bg="#121212", font=("Segoe UI", 11, "bold"), cursor="hand2")
         add_btn.pack(side=tk.RIGHT, padx=(5, 2))
         add_btn.bind("<Button-1>", lambda e: self.prompt_add_ticker())
 
-        # Pin / Always-on-Top Toggle button (📌)
         self.pin_btn = tk.Label(header_frame, text="📌", fg="#555555", bg="#121212", font=("Segoe UI", 9), cursor="hand2")
         self.pin_btn.pack(side=tk.RIGHT, padx=(5, 2))
         self.pin_btn.bind("<Button-1>", lambda e: self.toggle_topmost())
 
-        # Enable dragging the window anywhere from the header
         header_frame.bind("<Button-1>", self.start_move)
         header_frame.bind("<B1-Motion>", self.do_move)
         title_lbl.bind("<Button-1>", self.start_move)
         title_lbl.bind("<B1-Motion>", self.do_move)
 
-        # Rows container
-        self.rows_container = tk.Frame(self.main_frame, bg="#121212")
-        self.rows_container.pack(fill=tk.BOTH, expand=True)
+        # Scrollable area setup for rows
+        self.canvas = tk.Canvas(self.main_frame, bg="#121212", highlightthickness=0)
+        self.scrollbar = tk.Scrollbar(self.main_frame, orient="vertical", command=self.canvas.yview)
+        self.rows_container = tk.Frame(self.canvas, bg="#121212")
+
+        self.rows_container.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+        self.canvas.create_window((0, 0), window=self.rows_container, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.stock_widgets = []
         self.build_watchlist_ui()
@@ -88,7 +94,6 @@ class ASXTickerApp:
     def toggle_topmost(self):
         self.is_topmost = not self.is_topmost
         self.root.attributes("-topmost", self.is_topmost)
-        # Highlight pin green when active, dim when inactive
         color = "#4ade80" if self.is_topmost else "#555555"
         self.pin_btn.config(fg=color)
 
@@ -97,43 +102,101 @@ class ASXTickerApp:
             widget_info["frame"].destroy()
         self.stock_widgets.clear()
 
-        for item in self.watchlist:
-            row = self.create_stock_row(self.rows_container, item)
+        for index, item in enumerate(self.watchlist):
+            row = self.create_stock_row(self.rows_container, item, index)
             self.stock_widgets.append(row)
         
-        new_height = 60 + (len(self.watchlist) * 38)
+        # Dynamically size window height (caps at max ~6 visible rows to enable scrolling if more)
+        visible_rows = min(len(self.watchlist), 6)
+        new_height = 55 + (visible_rows * 38)
+        
+        # Show/hide scrollbar dynamically depending on length
+        if len(self.watchlist) > 6:
+            self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        else:
+            self.scrollbar.pack_forget()
+
         x = self.root.winfo_x()
         y = self.root.winfo_y()
-        self.root.geometry(f"240x{new_height}+{x}+{y}")
+        self.root.geometry(f"255x{new_height}+{x}+{y}")
 
-    def create_stock_row(self, parent, item):
-        frame = tk.Frame(parent, bg="#1e1e1e", cursor="hand2", padx=8, pady=6)
-        frame.pack(fill=tk.X, pady=3)
+    def create_stock_row(self, parent, item, index):
+        frame = tk.Frame(parent, bg="#1e1e1e", cursor="hand2", padx=6, pady=5)
+        frame.pack(fill=tk.X, pady=2)
 
-        lbl_ticker = tk.Label(frame, text=item["name"], fg="#ffffff", bg="#1e1e1e", font=("Segoe UI", 10, "bold"), width=5, anchor="w")
+        lbl_ticker = tk.Label(frame, text=item["name"], fg="#ffffff", bg="#1e1e1e", font=("Segoe UI", 9, "bold"), width=5, anchor="w")
         lbl_ticker.pack(side=tk.LEFT)
 
         lbl_price = tk.Label(frame, text="Loading...", fg="#cccccc", bg="#1e1e1e", font=("Segoe UI", 9), width=7, anchor="e")
-        lbl_price.pack(side=tk.LEFT, padx=2)
+        lbl_price.pack(side=tk.LEFT, padx=1)
 
-        lbl_change = tk.Label(frame, text="--", fg="#888888", bg="#1e1e1e", font=("Segoe UI", 9, "bold"), width=7, anchor="e")
-        lbl_change.pack(side=tk.LEFT, padx=2)
+        lbl_change = tk.Label(frame, text="--", fg="#888888", bg="#1e1e1e", font=("Segoe UI", 8, "bold"), width=7, anchor="e")
+        lbl_change.pack(side=tk.LEFT, padx=1)
 
-        # Explicit individual delete button (✕) at the end of the row
-        del_btn = tk.Label(frame, text="✕", fg="#666666", bg="#1e1e1e", font=("Segoe UI", 8, "bold"), cursor="hand2")
+        # Delete button (✕)
+        del_btn = tk.Label(frame, text="✕", fg="#555555", bg="#1e1e1e", font=("Segoe UI", 8, "bold"), cursor="hand2")
         del_btn.pack(side=tk.RIGHT, padx=(2, 0))
         del_btn.bind("<Button-1>", lambda e, t=item["ticker"]: self.remove_ticker(t))
         del_btn.bind("<Enter>", lambda e, b=del_btn: b.config(fg="#f87171"))
-        del_btn.bind("<Leave>", lambda e, b=del_btn: b.config(fg="#666666"))
+        del_btn.bind("<Leave>", lambda e, b=del_btn: b.config(fg="#555555"))
 
-        # Left click event on the row opens Google Finance
+        # Move Down button (▼)
+        if index < len(self.watchlist) - 1:
+            down_btn = tk.Label(frame, text="▼", fg="#555555", bg="#1e1e1e", font=("Segoe UI", 7), cursor="hand2")
+            down_btn.pack(side=tk.RIGHT, padx=1)
+            down_btn.bind("<Button-1>", lambda e, idx=index: self.move_item(idx, idx + 1))
+            down_btn.bind("<Enter>", lambda e, b=down_btn: b.config(fg="#ffffff"))
+            down_btn.bind("<Leave>", lambda e, b=down_btn: b.config(fg="#555555"))
+
+        # Move Up button (▲)
+        if index > 0:
+            up_btn = tk.Label(frame, text="▲", fg="#555555", bg="#1e1e1e", font=("Segoe UI", 7), cursor="hand2")
+            up_btn.pack(side=tk.RIGHT, padx=1)
+            up_btn.bind("<Button-1>", lambda e, idx=index: self.move_item(idx, idx - 1))
+            up_btn.bind("<Enter>", lambda e, b=up_btn: b.config(fg="#ffffff"))
+            up_btn.bind("<Leave>", lambda e, b=up_btn: b.config(fg="#555555"))
+
+        # Left-click opens Google Finance
         url = f"https://www.google.com/finance/quote/{item['gf']}"
+        # Right-click opens 7-day chart popup
         for widget in (frame, lbl_ticker, lbl_price, lbl_change):
             widget.bind("<Button-1>", lambda e, u=url: webbrowser.open(u))
+            widget.bind("<Button-3>", lambda e, t=item["ticker"], n=item["name"]: self.show_chart(t, n))
             widget.bind("<Enter>", lambda e, f=frame: f.config(bg="#2d2d2d"))
             widget.bind("<Leave>", lambda e, f=frame: f.config(bg="#1e1e1e"))
 
         return {"ticker": item["ticker"], "frame": frame, "price_lbl": lbl_price, "change_lbl": lbl_change}
+
+    def move_item(self, old_idx, new_idx):
+        item = self.watchlist.pop(old_idx)
+        self.watchlist.insert(new_idx, item)
+        save_watchlist(self.watchlist)
+        self.build_watchlist_ui()
+        self.update_data()
+
+    def show_chart(self, ticker_symbol, name):
+        # Fetch 7-day history and plot in a dark-mode matplotlib window
+        def fetch_and_plot():
+            try:
+                stock = yf.Ticker(ticker_symbol)
+                df = stock.history(period="7d")
+                if not df.empty:
+                    plt.style.use('dark_background')
+                    fig, ax = plt.subplots(figsize=(6, 3.5))
+                    ax.plot(df.index, df['Close'], color='#4ade80', linewidth=2, marker='o', markersize=4)
+                    ax.set_title(f"{name} - Last 7 Days", fontsize=11, color='white', pad=10)
+                    ax.set_ylabel("Price (AUD)", fontsize=9, color='#aaaaaa')
+                    ax.grid(True, color='#222222', linestyle='--', linewidth=0.5)
+                    plt.xticks(rotation=20, fontsize=8, color='#888888')
+                    plt.yticks(fontsize=8, color='#888888')
+                    fig.patch.set_facecolor('#121212')
+                    ax.set_facecolor('#181818')
+                    plt.tight_layout()
+                    plt.show()
+            except Exception:
+                pass
+
+        threading.Thread(target=fetch_and_plot, daemon=True).start()
 
     def prompt_add_ticker(self):
         code = simpledialog.askstring("Add Ticker", "Enter ASX Code (e.g. CBA, FMG, PLS):", parent=self.root)
@@ -200,6 +263,6 @@ class ASXTickerApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.geometry("240x210+1500+150")
+    root.geometry("255x210+1500+150")
     app = ASXTickerApp(root)
     root.mainloop()

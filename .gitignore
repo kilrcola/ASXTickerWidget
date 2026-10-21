@@ -1,0 +1,13 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local watchlist and configurations
+watchlist.json
+
+# PyInstaller build folders (if you build locally)
+build/
+dist/
+*.spec

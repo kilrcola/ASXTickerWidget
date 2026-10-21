@@ -25,3 +25,9 @@ Ensure you have Python installed on your system.
 Clone this repository and install the required libraries via your terminal:
 ```bash
 pip install -r requirements.txt
+
+⚙️ Customization
+Open asx_ticker.py or use the in-app + button to add your preferred ASX codes. Your custom watchlist is saved automatically to watchlist.json.
+
+📄 License
+Distributed under the MIT License. See LICENSE for more information.
